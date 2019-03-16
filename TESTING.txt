@@ -1,0 +1,1037 @@
+Before we get into test cases, here are some assumptions made due to the extremely unclear decription of commandShell.txt:
+
+1. ECE551PATH is a modifiable variable, when being modified, it should affect where myShell searches for program. However,
+   changing PATH would not affect where program searches for commands. 
+   ( Instruction just says ECE551PATH should be used to search for command, did not speicify whether it is modifiable. Moreover,
+     instruction says "if the user changes PATH, it should affect where your shell searches for program". This is really confusing
+     because we were told to search under ECE551PATH first. I don't understand why changing PATH would have effect when we are not really
+     using it. So I disregard the PATH, just focus on ECE551PATH. Changing PATH would have no effect on where myShell searches for command )
+
+2. When "set a      ", no matter how many spaces after 'a', 'a' would be set to empty string because all spaces between 2nd
+   and 3rd argument will be considered as argument divider. If no 3rd argument, 'a' is set to empty string.
+   ( Instruction just says takes spaces after var name, it does not say anything about whether we should consider multiple
+     spaces as argument divider )
+
+3. When "echo $xx" under the situation where "$x" and "$xx" both exist, the value of "$xx" will be printed. Variable search will always
+   take the longest variable name, if that var does not exist, no more search will be done for shorter var name.
+   ( Instruction does not specify AT ALL whether we should take a greedy or non-greedy approach, so I just made my rules )
+
+4. When a variable is set to a single symbol for pipeline or redirection, the variable and its corresponding redirection or pipeline sign can be used
+   interchangeably. But when a complete command with multiple arguments is stored in a variable, print this var would not invoke the command.
+   ( The instruction is extremely unclear on this point. It only says the variable should be replaced with its value, but it does not
+     indicate whether the "command in variable" should be turned into an actual command )
+
+5. When setting a variable to some value, if the value has '\', I decide to discard it and take the next char as a literal. When there is
+   "\$x", 'x' will not get translated since '$' is literal. When there is a valid variable name in value, it will get translated.
+   ( Instruction does not say anything about the rule of how to process the value besides "take the rest of command line",
+     so I just make my own rules. )
+
+6. More sepecific examples and explanations are included in actual test cases. Please understand some results are different from what you
+   expect but I consider them as correct due to my own understanding of the instruction (and Piazza Q&A).
+
+In general, I hope instructors put more effort to make things clear for future class, because it is really a waste of time finding problems
+along the way and go back and change things. Anyway, it has been a great semester taking ECE551, big thanks to all professors and TAs!
+
+
+
+
+Now let's get to testing.
+
+First of all, please compile the code with following command:
+      make
+
+Once the compilation succeeds, start myShell by running:
+     ./myShell
+	or
+     valgrind ./myShell
+
+
+Once myShell starts running, you should see "myShell:...$", where "..." will appear as the current working directory.
+You should also see the prompt in color as I chose to print the prompt with color to make it more readable.
+
+If you just hit enter, you will see a new prompt on a new line under the previous prompt. If you enter "exit" and hit enter, the program should terminate.
+
+Now let's start testing the code, we are going to divide testing into following sections:
+    1. Built-in function testing.
+       This section would focus on testing all the built-in functions specified as well as different variables and their combinations.
+
+    2. Full path command testing.
+       This section includes both system command (e.g. pwd, ls, ps, etc.) and programs written by users. We are going to test with both no arguments and
+       some arguments.
+
+    3. Commands without full path, pipeline and redirection.
+       This section would test combinations of normal linux command, pipeline and redirection. 
+
+    4. Random testing
+       Free style! Do combination of all above sections. 
+
+
+
+Section 1: Built-in Function Testing
+  (1) cd
+
+      You will see the working directory changes to the user's home directory.
+      
+      This is correct because it matches the behavior of the actual shell command. When user
+      enter "cd" with no arguments, the system direct the user to his home directory.
+
+
+  (2) cd .
+
+      You will see the working directory does not change and a new prompt is shown.
+
+      This is correct because '.' stands for the current directory. Therefore, the command should have no effect on changing directory.
+
+
+  (3) cd ..
+
+      You will see the working directory changes to the last directory in hierarchy. For example, if the current working directory is /home/ilove551/user,
+      the command will switch the working directory to /home/ilove551
+
+      This is correct because .. stands for the last directory in linux hierarchy.
+
+
+  (4) cd /home/user/551notfun
+
+      Here /home/user/551notfun directory does not exist. You will see the following message printed:
+
+      cd: No such file or directory
+
+      This is correct because... there is no directory named "/home/user/551notfun"
+
+
+  (5) cd /
+
+      You will see the working directory changes to the root directory.
+
+      This is correct because / stands for the root directory in linux system.
+
+  (6) cd /home/<netid>/ece551
+
+      In this case, if <netid> is your valid netid, you should see the working directory switches to /home/<netid>/ece551
+      If <netid> is someone else's valid netid, you should see the error:  cd: Permission denied.
+      If <netid> does not exist, you should see:  cd: No such file or directory
+      If /home/<netid>/ece551 happens to be a file, you should see:  cd: Not a directory
+
+      This is correct because cd can only brings you to an existing directory to which you have permission to access, otherwise error occurs. Unless you are Drew,
+      you probably won't have permission to access any other student's directory. 
+
+
+  (7) cd /home/<netid>/ece551 /
+
+      You should see the following error message:
+
+      built-in syntax error: cd
+
+      This is correct because cd only takes 0 or 1 arguments. In this case, cd does not recognize the third argument /
+
+
+  (8) set x hello
+      echo $x
+      echo $x, world
+
+      You should see the following:
+
+      hello
+      Program exited with status 0
+      hello, world
+      Program exited with status 0
+
+      This is correct becuase variable x has stored value "hello". Therefore, when you try to echo x as an variable, its value "hello" gets printed.
+
+
+  (9) set x world
+      echo hello, $x
+      echo hello,     $x
+      echo hello,\ \ $x
+      echo hello,\ \$x
+
+      You should see the following get printed:
+
+      hello, world
+      Program exited with status 0
+      hello, world
+      Program exited with status 0
+      hello,  world
+      Program exited with status 0
+      hello, $x
+      Program exited with status 0
+
+      These are correct because:
+      The first echo takes 2 arguments "hello," and $x (translated to "world"), so it gets printed out as 2 arguments separated by a space (default separator of echo).
+      The second echo is the same case as first echo even if it has more space between, echo still recognizes them as 2 arguments.
+      The third echo literally prints out 2 spaces because \ makes the next character a literal which is not an argument separator. Here "hello,\ \ $x" is actually one argument as a whole.
+      The last echo is similar to the third. There is a \ before $, so variable "x" would not get translated. The whole thing becomes one argument for echo to print.
+
+
+  (10) set x echo
+       $x hello
+       $x hello, $x
+
+       You will see the following get printed:
+
+       hello
+       Program exited with status 0
+       hello, echo
+       Program exited with status 0
+
+       This is correct because x will get translated to "echo" and the "echo" command would run if it is the first argument. Therefore, the first line is
+       produced by command "echo hello" and the second line is produced by "echo hello, echo".
+
+
+  (11) set x echo\ hello      1.2__
+       echo $x
+       set x echo hello
+       echo $x
+       $x world
+
+       You will see the following gets printed:
+
+       echo\ hello      1.2__
+       Program exited with status 0
+       echo hello
+       Program exited with status 0
+       Command echo hello not found
+
+       This is correct because:
+       set would store its second argument into the variable regardless what characters are included. Therefore, all char in second argument
+       are literals. However, when a command is mixed with other random string, it is no longer a command (in this case, "echo" is mixed
+       with "hello"), so even though last line gets translated to "echo hello world", there is no command named "echo hello".
+
+
+  (12) set   x       yy
+       set x   $x$x
+       echo $x
+       set $x$x $x$x
+       echo $x
+       echo $x$x
+
+       You will see the following gets printed:
+
+       yyyy
+       Program exited with status 0
+       yyyy
+       Program exited with status 0
+       yyyyyyyy
+       Program exited with status 0
+
+       This is correct because:
+       First, arguments are separated by single or multiples spaces. So there should not be any syntax error for both set commands.
+       Second, $x$x gets translated to "yyyy", so the second set becomes "set x yyyy". Therefore, the printed result is correct.
+       Third, "set $x$x $x$x" gets translated to "set yyyy yyyy", so the variable x does not get affected. When printing $x along, it
+       still has the value "yyyy". The last echo translated to "echo yyyyyyyy", so it prints 8 'y' at the end.
+
+
+  (13) set 3?1 lol
+       set var_1 lol
+       echo $var_1
+       set __var2 ece551
+       echo $__var2
+
+       You will see the following gets printed:
+
+       set: Variable name can only contain number, letter and '_'
+       lol
+       Program exited with status 0
+       ece551
+       Program exited with status 0
+
+       This is correct because:
+       Variable names can only contain '_', numbers and letters. Any combination of these three categories are valid. Otherwise it is invalid.
+       However, there is a special case for "$_" which will print the name of current running program (./myShell in this case). Moreover, since I
+       implement variable searching in the way that it only takes the longest possible var name, the program takes "$__var2" as variable
+       instead of "$_" which gives the current program running. Thus the above results are printed.
+
+
+   (14) set x y
+	echo ..$x..
+	set x $
+	echo $x
+	echo $$x
+	echo $
+
+	you will see the following gets printed:
+
+	..y..
+	Program exited with status 0
+	$
+	Program exited with status 0
+	$y
+	Program exited with status 0
+	$
+	Program exited with status 0
+
+	This is correct because:
+	set takes exactly 3 arguments, so when the number of arguments is not 3, print error message.
+	Variable x should get translated no matter where its position is in the argument.
+	When x gets set to '$', it would get translated to '$' anyway.
+	When there is an extra '$', it should be taken as a literal instead of a variable. The next '$' should still translate.
+	When there is no variable name after $, it stays as a literal.
+
+
+  (15) set x y
+       set xx yy
+       echo $x
+       echo $xx
+       echo $a$x
+       
+       You will see the followig gets printed:
+
+       y
+       Program exited with status 0
+       yy
+       Program exited with status 0
+       y
+       Program exited with status 0
+
+       This is correct because:
+       $x gets translated to 'y'. Also I chose to only search for the longest possible var name, meaning that I will always look for the variable that has the longest
+       variable name. Therefore, $xx would not get translated into "yy". Instead, the first 'x' gets translated and the second stays as a literal. If a variable
+       does not exist, then it would get translated to nothing.
+
+
+  (16) set a b
+       env
+       export
+       export a b
+       export a b c
+       export $a
+       export a
+       env
+
+       You will see the following gets printed:
+
+       // The env command will print all original env variable, no "a=b" 
+       Program exited with status 0
+       built-in syntax error: export
+       built-in syntax error: export
+       built-in syntax error: export
+       Export: variable does not exist!
+       // The env command will print all environment variables including "a=b"
+       Program exited with status 0
+
+       This is correct because:
+       After successfully setting the variable, env should not show this variable because it has not been exported.
+       export command only takes 2 arguments (export <var>), so any other numbers of arguments would cause error message printed.
+       export $a would translate to "export b", and b is not yet a variable, so the corresponding error message is printed.
+       After successfully exporting the variable 'a', we should see it as an environment variable when run "env". "a=b" will be printed.
+
+
+  (17) echo $PATH
+       set PATH $PATH:hello
+       echo $PATH
+       export PATH
+       ls
+       set ECE551PATH hello
+       export ECE551PATH
+       ls
+       /bin/ls
+
+       You will see the following gets printed:
+
+       /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games (or whatever your system PATH is)
+       Program exited with status 0
+       /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:hello
+       // print out all files and directories under current directory
+       Program exited with status 0
+       Command ls not found
+       // print out all files and directories under current directory
+       Program exited with status 0
+       
+       This is correct because:
+       $PATH gets translated to its corresponding value
+       When set PATH to itself plus a new directory, it would simply add that new directory to the end (the colon delimiter must be entered manually)
+       When set PATH to hello alone, it erase all its previous value and now "PATH=hello".
+       However, changing PATH does not affect where myShell searches for prorams because we have a pre-set ECE551PATH from which the program search.
+       Therefore, all simplified shell command still works.
+       Finally, changing ECE551PATH to a non-sense directory would make myShell not know where to search for commands, so simplified command does not
+       work any more. However, full path command should still work because user specifies where to search.
+
+
+  (18) set a b
+       export a
+       env
+       set a c
+       env
+       export a
+       env
+
+       You will see the following gets printed:
+
+       // first env prints all environment variable including "a=b"
+       Program exited with status 0
+       // second env prints all environment variable, it shows "a=b" unchanged
+       Program exited with status 0
+       // third env prints all environment variable but now "a=b" gets changed to "a=c"
+
+       This is correct because:
+       variable a first gets set to b and exported. Then the second set command changes the value of a to 'c'. However, if 'a' does not get
+       exported again, the newly set var would not go into effect. After it is exported again, it shows up in environment.
+
+
+  (19) echo $z
+
+       You will only see a blank new line gets printed along with the exit message:
+
+
+       Program exited with status 0
+
+       This is correct because variable z has not been set, so it cannot be found in the system. Therefore, nothing gets
+       print and it ends up being command "echo" with no argument. So it prints a blank new line.
+
+
+  (20) inc a
+       echo $a
+       set a b
+       echo $a
+       inc a
+       echo $a
+       inc a
+       echo $a
+       set a 3.3
+       echo $a
+       inc a
+       echo $a
+
+       You will see the following gets printed (every printout followed by "Program exited with status 0", eliminated for better reading):
+
+       1
+       b
+       1
+       2
+       3.3
+       1
+
+       This is correct because inc a non-existing variable should automatically initialize it with value 0 then increment. When 'a' is not
+       an integer, "inc a" would first make it 0 then increment, resulting in value 1. If 'a' is an integer, then inc just increments it by
+       1. If 'a' has a decimal part, inc recognizes it as a string and re-initialize it with value 0 then increments. 
+
+
+  (21) set a $a
+       echo $a
+
+       You will see a new line gets printed. This is correct because 'a' is set to the value of 'a' when 'a' has not been stored. So nothing
+       is stored in 'a' after first command. As a result, echo $a only produces a new line indicating an empty value.
+
+
+
+2. Full Path Command Testing
+
+  (1) /bin/ls
+      /bin/ls -la
+      /bin/pwd
+      /bin/ps aux
+
+      You will see the following gets printed:
+
+      // all visible files under current directory gets printed
+      Program exited with status 0
+      // all files (visible and invisible) under current directory gets printed in a list format
+      Program exited with status 0
+      // full path of the current directory
+      Program exited with status 0
+      // all processes for all users, with username displayed, also processes not attached to the terminal.
+      Program exited with status 0
+
+      This is correct because they match the exactly same output of running those command in a normal shell.
+
+
+  (2) /usr/local/bin/status
+      /sbin/ifconfig
+      /usr/bin/wc -c ./large_file
+      /bin/ifconfig
+
+      You will see the following gets printed:
+
+      // same output as running command "status" in terminal: assignment that is being graded and assignments due in the future
+      Program exited with status 0
+      // normal output of command "ifconfig"
+      Program exited with status 0
+      80001 ./large_file
+      Program exited with status 0
+      Command /bin/ifconfig not found
+
+      This is correct because:
+      For the first two commands, instead of simply typing in the command, giving the full path cause the program not to search for those command in PATH. 
+      For command "wc", it is under /usr/bin and the file size of ./testing_program/large_file is indeed 80001 bytes.
+      For last line, since there is no "ifconfig" executable under /bin, so the corresponding error message is printed.
+
+
+  (3) /usr/bin/gcc
+
+      You will see the following gets printed:
+
+      gcc: fatal error: no input files
+      compilation terminated.
+      Program exited with status 1
+
+      This is correct because arguments are missing, so myShell complains and the child process aborts.
+
+
+  (4) .
+      ..
+      ../bin/pwd
+      ./README
+
+      You will see the following gets printed:
+
+      Command . not found
+      Command .. not found
+      Command ../bin/pwd not found
+      execve: Permission denied
+      Program exited with status 1
+
+      This is correct because, '.' and '..' are all directories not files. Also ../bin/pwd does not exist. Finally, ./README is not an executable
+      file, so execve gives error message (Abort) and the corresponding signal is 1.
+
+
+  (5) ./segfault
+
+      You will see the following gets printed:
+
+      Program exited with status 11
+
+      This is correct because ./segfault would cause a segmentation fault and it is killed by signal 11 (SIGSEGV). 
+
+
+  (6) ./print_args all of programming
+      ./print_args all\ of\ programming
+      ./print_args $PATH
+
+      You will see the following gets printed:
+
+      ./print_args
+      all
+      of
+      programming
+      Program exited with status 0
+      ./print_args
+      all of programming
+      Program exited with status 0
+      ./print_args
+      /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games
+      Program exited with status 0
+
+      This is correct because the print_args prints each arguments passed in one by one, and each gets prints at a new line. The program exits with
+      0 upon success. The first run has 4 arguments so it prints 4 lines. The second run has 2 arguments, note here the space does not indicate separation
+      between arguments because \ makes the space a literal. The last run PATH gets translated to its value, and printed by the program.
+
+
+  (7) /usr/local/bin/set-partners
+
+      You will see the following gets printed:
+
+      execve: Permission denied
+      Program exited with status 1
+
+      This is correct because the student account does not have the privilege to run 'set-partners' (this would not be the case if instructors runs myShell).
+      As a result, the process was aborted with SIG 1.
+
+
+  (8) /bin/ls superhackerisme
+
+      You will see the following gets printed:
+
+      ls: cannot access 'superhackerisme': No such file or directory
+      Program exited with status 2
+
+      This is correct because "superhackerisme" does not exist at the moment. So the program terminates with SIGFPE.
+
+
+  (9) ./myShell
+
+      This command should again start myShell, but it is started within the parent myShell. You will see the prompt as usual, and everything should function
+      as the same as its parent myShell. When you try to exit to the "real" shell from the system, you need to "exit" twice because you have opened two "myShell".
+      By the way, this child myShell is independent from parent myShell, meaning that all variables from the parent do not get transferred as well as all processes.
+
+
+  (10) /bin/echo -n hello\ world
+
+       You will see the following gets printed:
+
+       hello worldProgram exited with status 0
+
+       This is correct because echo is under /bin, and -n means echo without a new line at the end. Therefore, the exit message gets printed
+       right after "hello world" on the same line.
+
+
+
+3. Command without full path; Pipeline and Redireection
+
+  (1) ls
+      ls -l -a
+      pwd
+      ps aux
+
+      You will see same thing gets printed as in test case section 2 (1).
+
+      This is correct because the these commands are the same as the ones in the 2 (1). The only difference is that the program would search
+      these commands while in 2 (1) the user already specified the full path.
+
+
+  (2) status
+      ifconfig
+      wc -c ./large_file
+
+      You will see the following gets printed:
+
+      // normal content of command "status" including assignments being graded as well as assignments due in near future.
+      Program exited with status 0
+      // normal content of "ifconfig" when it is running in real shell
+      Program exited with status 0
+      80001 ./large_file
+      Program exited with status 0
+
+      This is correct because these commands are the same as the ones in 2 (2). The only difference is that the program needs to search
+      under PATH this time.
+
+
+  (3) mv large_file small_file
+
+      You will see the following gets printed:
+
+      Program exited with status 0
+      // you will see the file named "large_file" gets its name changed to  "small_file" under current working directory
+
+      This is correct because mv would change the file name if the source and destination are under same directory. This hehaves the same
+      as "mv" is run in the real shell.
+
+
+  (4) man ls
+
+      You will see the following gets printed:
+
+      // intro to command "ls" same as the command running in real shell, you can also scroll up and down, press h for help and q for quit
+      Program exited with status 0
+
+      This is correct because it behaves the same as running "man ls" in real shell.
+
+  (5) top
+
+      You will see the following gets printed:
+
+      // information including tasks, memory, cpu and swap, etc. All relevant command within top can be used as well, such as 'c'.
+      Program exited with status 0
+
+      This is correct because it behaves the same as running "top" in real shell.
+
+
+  (6) touch test.txt
+      ls -l test.txt
+      rm test.txt
+      ls -l test.txt
+
+      You will see the following gets printed:
+
+      Program exited with status 0
+      -rw-rw-r-- 1 <user> <user> 0 Dec  1 21:38 test.txt
+      Program exited with status 0
+      Program exited with status 0
+      ls: cannot access 'test.txt': No such file or directory
+      Program exited with status 2
+
+      This is correct because touch created an empty file "test.txt", so when listing it in listing format, we can view same info as
+      running "ls" in real shell. After successfully removing the file, "test.txt" does not exist any more so "ls" complains and abort.
+
+
+  (7) uname
+
+      You will see the following gets printed:
+
+      Linux
+      Program exited with status 0
+
+      This is correct because "uname" gives the OS info of the system. And ece551 is using a Linux OS.
+
+
+  (8) grep -r myshell .
+
+      You will see the following gets printed:
+
+      ./Makefile:SOURCES=myshell.cpp environment.cpp argument.cpp
+      ./Makefile:%.o: %.cpp myshell.h environment.h argument.h 
+      Binary file ./myshell.o matches
+      Binary file ./myShell matches
+      ./myshell.cpp:#include "myshell.h"
+      Binary file ./.git/index matches
+      Program exited with status 0
+
+      This is correct because this command makes grep search recursively (-r) under current directory (.) for string "myshell".
+      Therefore, all matching results should be printed to terminal (actual printout might vary at grading, but the general
+      concept is correct).
+
+
+  (9) ping -c 3 google.com
+
+      You will see the following gets printed:
+
+      PING google.com (108.177.122.102) 56(84) bytes of data.
+      64 bytes from 108.177.122.102 (108.177.122.102): icmp_seq=1 ttl=47 time=22.2 ms	
+      64 bytes from 108.177.122.102 (108.177.122.102): icmp_seq=2 ttl=47 time=24.6 ms
+      64 bytes from 108.177.122.102 (108.177.122.102): icmp_seq=3 ttl=47 time=24.3 ms
+
+      --- google.com ping statistics ---
+      3 packets transmitted, 3 received, 0% packet loss, time 2011ms
+      rtt min/avg/max/mdev = 22.208/23.737/24.632/1.093 ms
+      Program exited with status 0
+
+      This is correct because the command sends 3 packets to google.com to ping and get the statistics at the end. This also behaves the
+      same as running same command in real shell.
+
+
+  (10) tar -cvf test.tar README Makefile myshell.cpp
+       ls -l test.tar
+
+       You will see the following gets printed:
+
+       README
+       Makefile
+       myshell.cpp
+       Program exited with status 0
+       -rw-rw-r-- 1 <user> <user> 20480 Dec  1 22:15 test.tar
+       Program exited with status 0
+
+       This is correct because tar compress README, Makefile and myshell.cpp into test.tar, and list them while compressing. After
+       compressing, we can list it in listing format, proving the test.tar was created successfully. This behaves the same as running
+       these commands in real shell.
+
+
+  (11) echo 123 | cat
+
+       You will see the following gets printed:
+
+       Program exited with status 0
+       123
+       Program exited with status 0
+
+       This is correct because "echo 123" output "123" to the pipe which forward the string to cat. So "echo" terminates first, printing
+       the exit message first. After this, "cat" print out the string and terminates. This behaves the same as real shell.
+
+
+  (12) cat large_file |
+
+       You will see the following gets printed:
+
+       Pipeline/Redirection syntax error!
+
+       This is correct because there must be some command after |, otherwise an error message should be thrown.
+
+
+  (13) cat large_file |<README
+
+       You will see the following gets printed:
+
+       Pipeline/Redirection syntax error!
+
+       This is correct because redirection sign cannot be the first or last argument of a command.
+
+
+  (14) cat /dev/zero | true
+
+       You will see the following gets printed:
+       
+       Program was killed by signal 13
+       Program exited with status 0
+
+       This is correct because "true" does not really take any input, so it would cause the pipe to break, returning signal 13 (broken pipe).
+       Command "true" itself simply returns 0 so it terminated with status 0 after done.
+
+
+  (15) gcc > gcc_output
+       cat gcc_output
+       gcc 2> gcc_output
+       cat gcc_output
+
+       You will see the following gets printed:
+
+       gcc: fatal error: no input files
+       compilation terminated.
+       Program exited with status 1
+       Program exited with status 1
+       gcc: fatal error: no input files
+       compilation terminated.
+
+       This is correct because running gcc alone will cause only error message gets printed. Since > does not redirect error message,
+       nothing is written to gcc_output. So when cat gcc_output, nothing shows up. When running gcc again with 2>, error message would
+       get redirect to gcc_output, so it does not get printed out in stdout. Now if we cat gcc_output again, we should see the error
+       message produced by the second gcc command above. 
+
+
+  (16) ls > ls_output
+       cat ls_output
+
+       You will see the following gets printed:
+
+       Program exited with status 0
+       // ls result of the current directory
+       Program exited with status 0
+
+       This is correct because "ls" will list all visible files under current directory, and its output is redirected to file named
+       "ls_output". Therefore, shell would not show the output on first command. Since the output is stored in ls_output, simply cat
+       the file should show the content from last command.
+
+
+  (17) cat < README
+
+       You will see the REAME file gets printed. This is correct because the content of README is now an input to cat command.
+       As a result, cat will just print out the content of README.
+
+
+  (18) ls > pwd_output
+       cat pwd_output
+       pwd > pwd_output
+       cat pwd_output
+
+       You will see the following gets printed:
+
+       Program exited with status 0
+       // ls result of the current directory
+       Program exited with status 0
+       Program exited with status 0
+       // pwd result of the current directory
+
+       This is correct because the ls result is redirected ans stored in pwd_output first. However, after redirecting output of pwd
+       to pwd_output, all content in pwd_output gets cleared before new output is written into the file. The second redirection
+       overwrites the results from first redirection, and this is the same behavior as running same commands in real shell.
+
+
+  (19) wc -l < README > wc_output
+       cat wc_output
+
+       You will see the following gets printed:
+
+       Program exited with status 0
+       58
+       Program exited with status 0
+
+       This is correct because wc counts the number of line (-l) in README and redirects the output to wc_output. Therefore, when
+       cat wc_output, it shows how many lines are in file README.
+       
+
+  (20) echo 2739760920 / 684940230 | bc
+
+       You will see the following gets printed:
+
+       Program exited with status 0
+       4
+       Program exited with status 0
+
+       This is correct because echo creates a string "2739760920 / 684940230" and pass it into bc. bc then calculates the result of
+       the expression which is 4.
+       
+
+  (21) cat < large_file | cat | cat | cat | cat | cat | cat | cat | wc -l > wc_output
+       cat wc_output
+
+       You will see the following gets printed:
+
+       Program exited with status 0
+       Program exited with status 0
+       Program exited with status 0
+       Program exited with status 0
+       Program exited with status 0
+       Program exited with status 0
+       Program exited with status 0
+       Program exited with status 0
+       Program exited with status 0
+       1
+       Program exited with status 0
+
+       This is correct because cat print all content in large_file, and pipe it through 8 pipes to wc, then wc read the content of
+       large_file and determine how many lines are in large_file. The result is correct because all large_file has is a single line
+       of '*'. This test case also tests whether the pipe can take long input (> 65536 bytes) since large_file is around 80000 bytes. 
+
+
+  (22) < ls
+       pwd >
+       gcc 2>
+       2> wc -l large_file
+
+       You will see the following gets printed:
+
+       Pipeline/Redirection syntax error!
+       Pipeline/Redirection syntax error!
+       Pipeline/Redirection syntax error!
+       Pipeline/Redirection syntax error!
+       
+       This is correct because '>', '<' and '2>' cannot be the last or first argument of a command. Therefore, an error is thrown.
+
+
+
+4. Random Testing
+
+  (1) Ctrl-D
+
+      You will see the myShell program exits. This is correct because Ctrl-D invokes EOF, causing the program to terminate.
+
+
+  (2) set a b < /dev/zero > /dev/null | cat
+      echo $a
+
+      You will see the following gets printed:
+
+      b < /dev/zero > /dev/null | cat
+      Program exited with status 0
+
+      This is correct because everything after the first argument (var) is its value. All chars are taken as literals, regardless
+      redirection and pipelines.
+
+
+  (3) cat README | set a
+
+      You will see the following gets printed:
+
+      Program was killed by signal 13
+
+      This is correct because "set a" does not take external input. Therefore, at the end 'a' is set to empty string "" and since
+      it does not take inputs from pipeline, the pipe is broken and return signal 13 (SIGPIPE) indicates broken pipe.
+
+
+  (4) /bin/ls | wc -l > cat
+      cat cat
+
+      You will see the following gets printed:
+
+      Program exited with status 0
+      Program exited with status 0
+      22  // might vary when grading
+      Program exited with status 0
+
+      This is correct because wc counts how many lines are in the outputs of "ls", then it creates a file "cat" and stores the result
+      in that file. So when acutally "cat" the file, the number of lines of "ls" should be shown.
+      
+
+  (5) ps aux | grep <netid> | cat > my_process
+      cat my_process
+
+      You will see the following gets printed:
+
+      Program exited with status 0
+      Program exited with status 0
+      Program exited with status 0
+      //  print out output of "ps" that is selected by "grep" with keyword "<netid>"
+      Program exited with status 0
+
+      This is correct because grep would only return lines in ps output that contains keyword <netid>. Such output is then passed
+      to cat whose output is stored in my_process. Therefore, the output would not show on the terminal until the file is cat.
+
+
+  (6) set x README
+      wc -l < $x > wc_output
+      cat wc_output
+
+      You will see the following gets printed:
+
+      Program exited with status 0
+      58  (number of lines in README, might vary if modification is done on README)
+      Program exited with status 0
+
+      This is correct because the second command would get translated to "wc -l < README > wc_output", which stores the result
+      in file wc_output. So cat wc_output should give the result.
+
+
+  (7) ls >> ls_output
+
+      You will see the following gets printed:
+
+      ls: cannot access '>>': No such file or directory
+      ls: cannot access 'lol': No such file or directory
+      Program exited with status 2
+
+      This is correct because ">>" is not redirection, so ls takes it as a file. Since both files ">>" and "ls_output" do not exist yet,
+      myShell complains.
+
+
+  (8) cat << README
+
+      You will see the following gets printed:
+
+      Redirect: unexpected extra redirect operator!
+
+      This is correct because only one '<' is enough to indicate redirection. When there is extra, myShell complains because "<<"
+      is not necessarily redirection. Same case for "2>" and ">".
+
+
+  (9) ls > > ls_output
+
+      You will see the following gets printed:
+
+      Redirect: unexpected '>'
+
+      This is correct because redirection cannot have consecutive '>', same case for other redirecetion signs. 
+
+
+  (10) set a |
+       echo 123 $a cat
+       
+       You will see the following gets printed:
+
+       Program exited with status 0
+       123
+       Program exited with status 0
+
+       This is correct because 'a' is set to '|', so the second commmand becomes "echo 123 | cat" which pipeline the output of "echo 123"
+       to cat, thus printing the output.
+       
+
+  (11) set a >
+       echo $a
+       echo '$a'
+       echo 123 $a echo_output
+       cat echo_output
+
+       You will see the following gets printed:
+
+       Pipeline/Redirection syntax error!
+       '>'
+       Program exited with status 0
+       Program exited with status 0
+       123
+       Program exited with status 0
+
+       This is correct because when 'a' set to '>', "echo $a" becomes "echo <" which would cause redirection error. But when printing '$a',
+       it becomes "echo '>'" which is legal to print directly. 'a' can be used as redirection as usual as the pipeline case above.
+
+  (12) set a <
+       cat < $a README
+
+       You will see the following gets printed:
+
+       Redirect: unexpected '<'
+
+       This is correct because the command is translated to "cat < < README", which has an unexpected '<'.
+
+
+  (13) set a 2>
+       gcc $a error
+       cat error
+
+       You will see the following gets printed:
+
+       Program exited with status 1
+       gcc: fatal error: no input files
+       compilation terminated.
+       Program exited with status 0
+
+       This is correct because the command is translated to "gcc 2> error", so file error has the error message. When cat error, message shows.
+
+
+  (14) Type in bunch of spaces and hit enter.
+
+       This would have the same effect as simply hit enter. A new prompt would show up and nothing gets executed. This is correct because
+       single/multiple spaces is not a command after all.
+
+
+  (15) set a exit
+       $a
+
+       You will see myShell exits. This is correct because 'a' get translated to 'exit' which gets executed. 
+
+
+  (16) set a p
+       set b wd
+       $a$b
+
+       You will see the full path of current directory gets printed.
+
+       This is correct because $a$b translated to 'pwd' which is a valid command.
